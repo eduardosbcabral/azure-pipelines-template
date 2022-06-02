@@ -1,0 +1,55 @@
+# Library group templates that contains the pipeline variables
+# [Change it to suit your library group]
+variables:
+  - template: 'variables/defaults.template.yml@templates' # Default static pipeline variables
+  - group: DEFAULT_PIPELINE_LIB
+  - group: API_PIPELINE_VARIABLES
+
+# Parameters to receive a value at runtime when building the pipeline
+# [Never change it]
+parameters:
+  - name: staging_tag
+    type: string
+    default: ' ' # Empty space because the azure does not let us have a optional parameter for now. The code will handle this value if you deploy with an empty space.
+    displayName: 'Tag for staging deployment. Caution: check if the inserted tag is one (major/minor/patch) version higher than the latest tag in main/master.'
+    
+# Trigger an automatic production build when any tag is created
+# [Never change it]
+trigger:
+  branches:
+    include:
+    - release/*  
+    - hotfix/*
+  tags:
+    include: 
+    - '*'
+
+# Trigger an automatic build at every commit when a PR is opened to one of these branches
+# [Never change it]
+pr:
+  branches:
+    include:
+    - develop
+    - master
+    - main
+
+pool:
+ name: Default
+ demands:
+   - Agent.OS -equals Linux
+
+# Reference the main repository azure pipeline templates
+# [Change the endpoint parameter to suit your github service connection name in the azure devops]
+resources:
+  repositories:
+  - repository: templates
+    type: github
+    name: eduardosbcabral/azure-pipelines-templates
+    endpoint: YOUR_SERVICE_GITHUB_CONNECTION_NAME
+
+# Extends the default template for the pipeline
+# [Never change it]
+extends:
+  template: default.gitflow.yml@templates
+  parameters:
+    staging_tag: ${{ parameters.staging_tag }}

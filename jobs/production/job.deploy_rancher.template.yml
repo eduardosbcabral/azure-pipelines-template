@@ -1,0 +1,23 @@
+jobs:
+- job: DeployProductionRancher
+  displayName: 'Deploy in production using Rancher'
+  condition: eq(variables['ExecuteDockerPublish'], 'true')
+  steps:
+  - checkout: none
+  - task: ThiagoBarradas.deploy-notification.deploy-notification.notification@1
+    displayName: 'Deploy Notification'
+    inputs:
+      environment: $(ASPNETCORE_ENVIRONMENT)
+      new_url: $(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)
+      is_hotfix: 
+  - task: ThiagoBarradas.rancher.upgrade-task.upgrade@1
+    displayName: 'Rancher Upgrade Service'
+    inputs:
+      url: '$(Rancher_Url)'
+      accessKey: '$(Rancher_AccessKey)'
+      secretKey: '$(Rancher_SecretKey)'
+      installDocker: false
+      image: '$(DockerRegistry)/$(DockerImageName)'
+      tag: '$(Build.BuildNumber)'
+      prefixVars: '$(EnvVarsPrefix)'
+      manualVars: '$(AdditionalEnvVars)'

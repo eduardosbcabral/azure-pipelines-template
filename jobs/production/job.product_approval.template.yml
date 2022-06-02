@@ -1,0 +1,11 @@
+jobs:
+- deployment: ProductApproval
+  displayName: 'Product Approval'
+  environment: 'ProductOwnerApproval'
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - checkout: none
+        - download: none
+        - script: echo "Build Approved by the Product area!"

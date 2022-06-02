@@ -1,0 +1,86 @@
+parameters:
+- name: staging_tag
+
+stages:
+- stage: PrepareApplication
+  displayName: 'Prepare Application'
+  jobs:
+  - template: jobs/common/job.check_build_version.gitflow.template.yml
+    parameters:
+      staging_tag: ${{ parameters.staging_tag }}
+  - template: jobs/common/job.build_application.template.yml
+  - template: jobs/common/job.run_unit_tests.template.yml
+  - template: jobs/common/job.run_sonarqube.template.yml
+  - template: jobs/common/job.publish_docker_image.template.yml
+  - template: jobs/common/job.pack_nuget.template.yml
+  
+        
+# Deploy Staging
+- stage: DeployStaging
+  displayName: 'Deploy - Staging'
+  dependsOn: PrepareApplication
+  condition: |
+    and
+    (
+      succeeded('PrepareApplication'),
+      not(eq(variables['Build.SourceBranchName'], 'master')),
+      not(eq(variables['Build.SourceBranchName'], 'main')),
+      not(eq(variables['Build.SourceBranchName'], 'develop')),
+      eq(dependencies.PrepareApplication.outputs['CheckBuildVersion.UpdateBuildVersionNumberTask.DeployType'], 'staging'),
+      or
+      (
+        eq(variables['ExecuteDockerPublish'], 'true'),
+        eq(variables['ExecuteSdkPublish'], 'true'),
+        eq(variables['ExecuteIntegrationTests'], 'true')
+      )
+    )
+  variables:
+  - template: 'devops/variables.staging.yml@self'
+  jobs:
+  - template: jobs/staging/job.deploy_rancher.template.yml
+  - template: jobs/staging/job.publish_nuget_package.template.yml
+  - template: jobs/staging/job.run_integration_tests.template.yml
+  
+
+# Deploy Approval
+- stage: DeployApproval
+  displayName: 'Approval'
+  dependsOn: PrepareApplication
+  condition: | 
+    and
+    (
+      succeeded('PrepareApplication'),
+      eq(dependencies.PrepareApplication.outputs['CheckBuildVersion.UpdateBuildVersionNumberTask.DeployType'], 'production'),
+      or
+      (
+        eq(variables['ExecuteDockerPublish'], 'true'),
+        eq(variables['ExecuteSdkPublish'], 'true')
+      )
+    )
+  jobs:
+  - template: jobs/production/job.product_approval.template.yml
+  - template: jobs/production/job.tech_approval.template.yml
+
+
+# Deploy Production
+- stage: DeployProduction
+  displayName: 'Deploy - Production'
+  dependsOn:
+  - PrepareApplication
+  - DeployApproval
+  condition: |
+    and
+    (
+      succeeded('DeployApproval'),
+      eq(dependencies.PrepareApplication.outputs['CheckBuildVersion.UpdateBuildVersionNumberTask.DeployType'], 'production'),
+      or
+      (
+        eq(variables['ExecuteDockerPublish'], 'true'),
+        eq(variables['ExecuteSdkPublish'], 'true')
+      )
+    )
+  variables:
+  - template: 'devops/variables.production.yml@self'
+  jobs:
+  - template: jobs/production/job.deploy_rancher.template.yml
+  - template: jobs/production/job.publish_nuget_package.template.yml

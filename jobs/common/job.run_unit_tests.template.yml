@@ -1,0 +1,79 @@
+jobs:
+- job: 'RunUnitTests'
+  displayName: 'Run Unit Tests'
+  dependsOn:
+  - CheckBuildVersion
+  - Build
+  condition: |
+    and
+    (
+      succeeded('CheckBuildVersion'),
+      succeeded('Build'),
+      eq(variables['ExecuteUnitTests'], 'true')
+    )
+  variables:
+  - name: NugetArgs
+    value: $[ dependencies.Build.outputs['CheckCustomNugetConfig.nuget_args'] ]
+  steps:
+  - checkout: none
+  - task: DotNetCoreCLI@2
+    displayName: 'Configure Covertlet in the Unit Test Project'
+    inputs:
+      command: custom
+      projects: '$(TestProjectFolder)/*.csproj'
+      custom: add
+      arguments: 'package coverlet.collector'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Configure XUnit logger in the Unit Test Project'
+    inputs:
+      command: custom
+      projects: '$(TestProjectFolder)/*.csproj'
+      custom: add
+      arguments: 'package XunitXml.TestLogger'
+  
+  - script: |
+      cd $(Agent.BuildDirectory)
+      ls -la
+      rm -rf .sonarqube
+    displayName: 'Clean .sonarqube folder (avoid sonar usage in this job)'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Run Unit Tests'
+    inputs:
+      command: test
+      projects: '$(TestProjectFolder)/*.csproj'
+      arguments: '-c Release -v minimal -p:SonarQubeTargetsImported=true -r $(Build.ArtifactStagingDirectory)/test_results --logger:"xunit;LogFilePath=$(Build.ArtifactStagingDirectory)/test_results/result.xunit.xml" --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover $(NugetArgs)'
+      publishTestResults: false
+      
+  - script: |
+      cd $(Build.ArtifactStagingDirectory)
+      find .
+    displayName: 'Print test files'
+
+  # - task: reportgenerator@5
+  #   displayName: Generate Test Report
+  #   inputs:
+  #     reports: '$(Build.ArtifactStagingDirectory)/test_results/coverage.cobertura.xml'
+  #     targetdir: '$(Build.ArtifactStagingDirectory)/coverage_results'
+
+  - task: PublishCodeCoverageResults@1
+    displayName: 'Publish code coverage report'
+    inputs:
+      codeCoverageTool: 'Cobertura'
+      summaryFileLocation: '$(Build.ArtifactStagingDirectory)/test_results/*/coverage.cobertura.xml'
+      pathToSources: .
+      failIfCoverageEmpty: true
+      
+  - task: PublishTestResults@2
+    displayName: 'Publish XUnit test results'
+    inputs:
+      testResultsFormat: 'XUnit'
+      testResultsFiles: '$(Build.ArtifactStagingDirectory)/test_results/result.xunit.xml'
+      testRunTitle: 'Collecting Test Results'
+
+  - task: PublishPipelineArtifact@1
+    displayName: Store Unit Test Results
+    inputs:
+      path: $(Build.ArtifactStagingDirectory)/test_results
+      artifact: unit_tests_results

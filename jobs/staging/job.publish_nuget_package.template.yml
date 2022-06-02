@@ -1,0 +1,32 @@
+jobs:
+- job: PublishNugetPackage
+  dependsOn: 
+  - DeployStagingRancher
+  condition: |
+    and
+    (
+      in(dependencies.DeployStagingRancher.result, 'Succeeded', 'Skipped'),
+      eq(variables['ExecuteSdkPublish'], 'true'),
+      eq(stageDependencies.PrepareApplication.CheckBuildVersion.outputs['UpdateBuildVersionNumberTask.PackingNuget'], 'true')
+    )
+  displayName: 'Publish SDK Nuget Package'
+  steps:
+  - checkout: none
+  - task: DownloadPipelineArtifact@2
+    displayName: Get SDK Nuget package artifact
+    inputs:
+      path: '$(Build.ArtifactStagingDirectory)/artifacts/sdk_nuget_package'
+      artifact: sdk_nuget_package
+  - script: |
+      cd $(Build.ArtifactStagingDirectory)
+      pwd && find .
+    displayName: 'Print files'
+  - task: DotNetCoreCLI@2
+    displayName: 'Publish Nuget Package (Development)'
+    continueOnError: true
+    inputs:
+      command: 'push'
+      packagesToPush: '$(Build.ArtifactStagingDirectory)/artifacts/sdk_nuget_package/*.nupkg'
+      nuGetFeedType: 'internal'
+      # Default vsts feed of the azure devops organization
+      publishVstsFeed: 'YOUR VSTS FEED'

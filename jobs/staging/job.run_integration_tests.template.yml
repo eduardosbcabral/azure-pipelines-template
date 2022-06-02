@@ -1,0 +1,23 @@
+jobs:
+- job: IntegrationTests
+  displayName: 'Run integration tests using Runscope'
+  dependsOn:
+  - DeployStagingRancher
+  - PublishNugetPackage
+  condition: |
+    and
+    (
+      in(dependencies.DeployStagingRancher.result, 'Succeeded', 'Skipped'),
+      in(dependencies.PublishNugetPackage.result, 'Succeeded', 'Skipped'),
+      eq(variables['ExecuteIntegrationTests'], 'true')
+    )
+  steps:
+  - checkout: none
+  - script: | 
+      sleep $(IntegrationTestsDelay)
+    displayName: Waiting to start integration tests
+  - task: ThiagoBarradas.runscopetest.runscopetest-task.runscopetest@1
+    displayName: 'Runscope Integration Test'
+    inputs:
+      triggerUrl: '$(Runscope_Url)'
+      accessToken: '$(Runscope_Token)'

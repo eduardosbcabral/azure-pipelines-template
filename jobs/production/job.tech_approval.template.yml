@@ -1,0 +1,11 @@
+jobs:
+- deployment: TechApproval
+  displayName: 'Tech Approval'
+  environment: 'Production'
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - checkout: none
+        - download: none
+        - script: echo "Build Approved by the Tech area!"

@@ -1,0 +1,41 @@
+jobs:
+- job: 'PublishDockerImage'
+  displayName: 'Publish Docker Image'
+  dependsOn:
+  - CheckBuildVersion
+  - Build
+  - RunUnitTests
+  - RunSonarqube
+  condition: |
+    and
+    (
+      eq(dependencies.CheckBuildVersion.outputs['UpdateBuildVersionNumberTask.PublishDockerImage'], 'true'),
+      succeeded('CheckBuildVersion'), 
+      succeeded('Build'), 
+      in(dependencies.RunUnitTests.result, 'Succeeded', 'Skipped'),
+      in(dependencies.RunSonarqube.result, 'Succeeded', 'Skipped'),
+      eq(variables['ExecuteDockerPublish'], 'true')
+    )
+  variables:
+    ReleaseVersion: $(Build.BuildNumber)
+  steps:
+    - checkout: none
+    - task: DownloadPipelineArtifact@2
+      displayName: Get Application Artifact
+      inputs:
+        artifact: application_build_artifact
+        ## Dist folder that contains the artifact
+        ## In this case, bin is configured in the
+        ## Dockerfile to be the default app folder
+        path: $(Build.ArtifactStagingDirectory)/artifacts/application
+    - script: |
+        echo "Version: $(ReleaseVersion)"
+      displayName: Printing Versions
+    - task: Docker@2
+      displayName: 'Build and Push Docker Image'
+      inputs:
+        containerRegistry: '$(DockerRegistryAccount)'
+        repository: '$(DockerImageName)'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.ArtifactStagingDirectory)/artifacts/application/Dockerfile'
+        tags: $(ReleaseVersion)

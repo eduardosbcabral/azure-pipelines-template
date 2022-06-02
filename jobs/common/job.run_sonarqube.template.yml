@@ -1,0 +1,59 @@
+jobs:
+- job: 'RunSonarqube'
+  displayName: 'Run Sonarqube'
+  dependsOn:
+  - CheckBuildVersion
+  - Build
+  - RunUnitTests
+  condition: |
+    and
+    (
+      succeeded('CheckBuildVersion'), 
+      succeeded('Build'), 
+      in(dependencies.RunUnitTests.result, 'Succeeded', 'Skipped'),
+      eq(variables['ExecuteSonarqube'], 'true')
+    )
+  variables:
+  - name: NugetArgs
+    value: $[ dependencies.Build.outputs['CheckCustomNugetConfig.nuget_args'] ]
+  steps:
+  - task: DownloadPipelineArtifact@2
+    displayName: Get Test Results
+    condition: eq(variables['ExecuteUnitTests'], 'true')
+    inputs:
+      artifact: unit_tests_results
+      path: '$(Build.ArtifactStagingDirectory)/test_results'
+  - script: |
+      cd $(Build.ArtifactStagingDirectory)
+      find .
+    displayName: 'Print test files'
+
+  - task: SonarCloudPrepare@1
+    displayName: 'Pre-Starting Sonarqube Analysis'
+    inputs:
+      SonarCloud: '$(SonarqubeAccount)'
+      organization: '$(Organization)'
+      scannerMode: 'MSBuild'
+      projectKey: '$(SonarqubeProject)'
+      projectName: '$(MainProjectName)'
+      extraProperties: |
+        sonar.sourceEncoding=UTF-8
+        sonar.cs.vstest.reportsPaths="$(Build.ArtifactStagingDirectory)/test_results/*.trx"
+        sonar.cs.opencover.reportsPaths="$(Build.ArtifactStagingDirectory)/test_results/*/coverage.opencover.xml"
+  - task: DotNetCoreCLI@2
+    displayName: 'Build Solution for Analysis'
+    inputs:
+      command: 'build'
+      projects: '**/*.sln'
+      arguments: '--configuration Release $(NugetArgs)'
+  - task: SonarCloudAnalyze@1
+    displayName: 'Finish Sonarqube Analysis'
+  - task: SonarCloudPublish@1
+    displayName: 'Publish Sonarqube Analysis'
+    inputs:
+      pollingTimeoutSec: '300'
+  - task: sonarcloud-buildbreaker@2
+    displayName: 'Check Sonarqube Analysis'
+    inputs:
+      SonarCloud: '$(SonarqubeAccount)'
+      organization: '$(Organization)'

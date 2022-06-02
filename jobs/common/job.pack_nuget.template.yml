@@ -1,0 +1,39 @@
+jobs:
+- job: PackNuget
+  displayName: 'Pack SDK Nuget package'
+  dependsOn: 
+  - CheckBuildVersion
+  - Build
+  - RunUnitTests
+  - RunSonarqube
+  - PublishDockerImage 
+  condition: |
+    and
+    (
+      eq(dependencies.CheckBuildVersion.outputs['UpdateBuildVersionNumberTask.PackingNuget'], 'true'),
+      succeeded('CheckBuildVersion'), 
+      succeeded('Build'), 
+      in(dependencies.RunUnitTests.result, 'Succeeded', 'Skipped'),
+      in(dependencies.RunSonarqube.result, 'Succeeded', 'Skipped'),
+      in(dependencies.PublishDockerImage.result, 'Succeeded', 'Skipped'),
+      eq(variables['ExecuteSdkPublish'], 'true')
+    )
+  variables:
+    PackageVersion: $[ dependencies.CheckBuildVersion.outputs['UpdateBuildVersionNumberTask.PackageVersion'] ]
+  steps:
+  - task: DotNetCoreCLI@2
+    displayName: 'Packing SDK Nuget Package'
+    inputs:
+      command: 'custom'
+      projects: '$(SdkProjectFolder)/*.csproj'
+      custom: 'pack'
+      arguments: '-p:Configuration=Release -p:PackageVersion=$(PackageVersion) -p:Version=$(PackageVersion) --output $(Build.ArtifactStagingDirectory)/artifacts/sdk_nuget_package'
+  - task: PublishPipelineArtifact@1
+    displayName: 'Store SDK nuget package artifact'
+    inputs:
+      path: '$(Build.ArtifactStagingDirectory)/artifacts/sdk_nuget_package'
+      artifact: sdk_nuget_package
+  - script: |
+      cd $(Build.ArtifactStagingDirectory)
+      pwd && find .
+    displayName: 'Print files'

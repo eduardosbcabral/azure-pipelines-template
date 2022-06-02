@@ -1,0 +1,22 @@
+jobs:
+- deployment: DeployStagingRancher
+  displayName: 'Deploy in staging using Rancher'
+  condition: eq(variables['ExecuteDockerPublish'], 'true')
+  environment: 'Staging'
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - checkout: none
+        - download: none
+        - task: ThiagoBarradas.rancher.upgrade-task.upgrade@1
+          displayName: 'Rancher Upgrade Service'
+          inputs:
+            url: '$(Rancher_Url)'
+            accessKey: '$(Rancher_AccessKey)'
+            secretKey: '$(Rancher_SecretKey)'
+            installDocker: false
+            image: '$(DockerRegistry)/$(DockerImageName)'
+            tag: '$(Build.BuildNumber)'
+            prefixVars: '$(EnvVarsPrefix)'
+            manualVars: '$(AdditionalEnvVars)'
